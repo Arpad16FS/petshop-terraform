@@ -1,44 +1,102 @@
+###############################################
+# VARIABLES GENERALES DE AWS
+###############################################
 variable "aws_region" {
-  description = "AWS region to deploy in"
+  description = "Región de AWS donde se desplegarán los recursos."
   type        = string
   default     = "us-east-1"
 }
 
+###############################################
+# VARIABLES DE RED (VPC, SUBNETS, ROUTES)
+###############################################
 variable "vpc_cidr" {
-  type    = string
-  default = "10.0.0.0/16"
+  description = "Rango CIDR principal de la VPC."
+  type        = string
+  default     = "10.0.0.0/16"
 }
 
-variable "public_subnet_cidr" {
-  type    = string
-  default = "10.0.1.0/24"
+
+
+variable "subnet_ids" {
+  description = "Subredes existentes en distintas zonas de disponibilidad"
+  type        = list(string)
+  default     = ["subnet-02e2c54158706f1ce", "subnet-08d3544ba8bf8fb1c"]
 }
 
-variable "instance_type" {
-  type    = string
-  default = "t3.micro"
-}
 
-variable "ami_id" {
-  description = "AMI ID to use (Amazon Linux 2 recommended). If empty, provider will lookup latest Amazon Linux 2 AMI"
+###############################################
+# VARIABLES DE SEGURIDAD
+###############################################
+variable "app_sg_id" {
+  description = "ID del Security Group para las instancias de aplicación (opcional)."
   type        = string
   default     = ""
 }
 
-variable "key_name" {
-  description = "Optional key pair name for SSH (if you want). Leave empty to not set."
-  type        = string
-  default     = ""
-}
-
-variable "instance_profile" {
-  description = "Existing instance profile to attach (e.g. LabInstanceProfile in AWS Academy). Leave empty to not attach."
+variable "alb_sg_id" {
+  description = "ID del Security Group para el Application Load Balancer (opcional)."
   type        = string
   default     = ""
 }
 
 variable "allow_ssh_from" {
-  description = "IP range allowed for SSH (if key provided). Use '' to disable or 0.0.0.0/0 to allow (not recommended)"
+  description = "Rango de IPs permitidas para SSH. Usa '' para deshabilitar."
   type        = string
   default     = ""
 }
+
+###############################################
+# VARIABLES DE INSTANCIAS EC2 / AUTOSCALING
+###############################################
+variable "instance_type" {
+  description = "Tipo de instancia EC2."
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "ami_id" {
+  description = "AMI ID (opcional). Si está vacío, Terraform buscará la más reciente de Amazon Linux 2."
+  type        = string
+  default     = ""
+}
+
+variable "key_name" {
+  description = "Nombre del par de claves SSH (opcional)."
+  type        = string
+  default     = ""
+}
+
+variable "instance_profile" {
+  description = "Instance profile existente para asociar con las instancias (opcional)."
+  type        = string
+  default     = ""
+}
+
+###############################################
+# VARIABLES DE IDENTIFICACIÓN
+###############################################
+
+variable "vpc_id" {
+  description = "VPC existente por defecto"
+  type        = string
+  default     = "vpc-0086f91881fb8c96c"
+}
+
+###############################################
+# VARIABLES DE SUBREDES PÚBLICAS
+###############################################
+variable "public_subnet_1_cidr" {
+  description = "Rango CIDR de la primera subred pública (AZ us-east-1a)"
+  type        = string
+  default     = "172.31.1.0/24"
+}
+
+variable "public_subnet_2_cidr" {
+  description = "Rango CIDR de la segunda subred pública (AZ us-east-1b)"
+  type        = string
+  default     = "172.31.2.0/24"
+}
+
+
+
