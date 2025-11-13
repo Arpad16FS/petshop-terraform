@@ -1,11 +1,8 @@
 #!/bin/bash
-set -e
+set -eux
 
-yum update -y
-yum install -y gcc-c++ make sqlite sqlite-devel
-
-curl -fsSL https://rpm.nodesource.com/setup_16.x | bash -
-yum install -y nodejs
+dnf update -y
+dnf install -y nodejs npm
 
 mkdir -p /home/ec2-user/petshop-app/public
 chown -R ec2-user:ec2-user /home/ec2-user/petshop-app
@@ -13,34 +10,84 @@ cd /home/ec2-user/petshop-app
 
 cat << 'EOF' > app.js
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
 const bodyParser = require('body-parser');
+const mysql = require('mysql2/promise');
 const path = require('path');
-const app = express();
-const db = new sqlite3.Database('appointments.db');
 
+const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-db.run('CREATE TABLE IF NOT EXISTS appointments (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, service TEXT, date TEXT, time TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)');
+const DB_HOST = process.env.DB_HOST;
+const DB_USER = process.env.DB_USER;
+const DB_PASS = process.env.DB_PASS;
+const DB_NAME = process.env.DB_NAME;
+
+async function getConnection() {
+  return mysql.createConnection({
+    host: DB_HOST,
+    user: DB_USER,
+    password: DB_PASS,
+    database: DB_NAME,
+  });
+}
+
+async function initDB() {
+  const conn = await getConnection();
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS appointments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255),
+      service VARCHAR(255),
+      date VARCHAR(50),
+      time VARCHAR(50),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await conn.end();
+}
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.post('/book', (req, res) => {
+app.post('/book', async (req, res) => {
   const { name, service, date, time } = req.body;
-  db.run('INSERT INTO appointments (name, service, date, time) VALUES (?, ?, ?, ?)', [name, service, date, time], function(err) {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Error al guardar la cita');
-    }
+
+  try {
+    const conn = await getConnection();
+    await conn.execute(
+      "INSERT INTO appointments (name, service, date, time) VALUES (?, ?, ?, ?)",
+      [name, service, date, time]
+    );
+    await conn.end();
+
     res.sendFile(path.join(__dirname, 'public', 'success.html'));
-  });
+  } catch (err) {
+    console.error("DB Error:", err);
+    res.status(500).send("Error al guardar la cita");
+  }
+});
+
+app.get('/appointments', async (req, res) => {
+  try {
+    const conn = await getConnection();
+    const [rows] = await conn.execute("SELECT * FROM appointments ORDER BY id DESC");
+    await conn.end();
+    res.json(rows);
+  } catch (err) {
+    console.error("DB Error:", err);
+    res.status(500).send("Error al obtener las citas");
+  }
 });
 
 const PORT = 8080;
-app.listen(PORT, () => console.log('Petshop app running on port', PORT));
+
+initDB().then(() => {
+  app.listen(PORT, () => console.log("Petshop RDS v8-full running on port", PORT));
+}).catch(err => {
+  console.error("Failed to init DB:", err);
+});
 EOF
 
 cat << 'EOF' > index.html
@@ -51,7 +98,6 @@ cat << 'EOF' > index.html
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Petshop - Agenda tu cita</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="icon" href="/favicon.ico">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body class="bg-light">
@@ -66,7 +112,7 @@ cat << 'EOF' > index.html
             </div>
             <form action="/book" method="POST" class="mt-3">
               <div class="mb-3">
-                <label class="form-label">Nombre</label>
+                <label class="form-label">Nombre de tu mascota</label>
                 <input type="text" name="name" class="form-control form-control-lg" required />
               </div>
               <div class="mb-3">
@@ -75,6 +121,7 @@ cat << 'EOF' > index.html
                   <option value="Baño">Baño</option>
                   <option value="Corte">Corte</option>
                   <option value="Corte de uñas">Corte de uñas</option>
+                  <option value="Baño + Corte">Baño + Corte</option>
                 </select>
               </div>
               <div class="row g-3">
@@ -91,7 +138,9 @@ cat << 'EOF' > index.html
             </form>
           </div>
         </div>
-        <p class="text-center text-muted mt-3 small">Tu cita quedará registrada y verás una confirmación en pantalla.</p>
+        <p class="text-center text-muted mt-3 small">
+          Tu cita quedará registrada en nuestra base de datos en AWS RDS (MySQL 8.0) y verás una confirmación en pantalla.
+        </p>
       </div>
     </div>
   </div>
@@ -99,13 +148,12 @@ cat << 'EOF' > index.html
 </html>
 EOF
 
+mkdir -p public
+
 cat << 'EOF' > public/style.css
-body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
 .brand { color: #2e4a7d; }
 EOF
-
-# tiny favicon
-printf '\x00\x00\x01\x00\x01\x00\x10\x10\x10\x00\x01\x00\x04\x00\x28\x01\x00\x00\x16\x00\x00\x00\x28\x00\x00\x00\x10\x00\x00\x00\x20\x00\x00\x00\x01\x00\x04\x00\x00\x00\x00\x00\xE0\x00\x00\x00\x12\x0B\x00\x00\x12\x0B\x00\x00\x10\x00\x00\x00\x10\x00\x00\x00' > public/favicon.ico
 
 cat << 'EOF' > public/success.html
 <!DOCTYPE html>
@@ -122,9 +170,9 @@ cat << 'EOF' > public/success.html
       <div class="col-lg-6">
         <div class="alert alert-success shadow-sm" role="alert">
           <h4 class="alert-heading">¡Cita agendada!</h4>
-          <p>Tu turno fue asignado correctamente. ¡Gracias por confiar en nuestra peluquería de mascotas! 🐶✂️</p>
+          <p>Tu turno fue asignado correctamente y se guardó en nuestra base de datos en AWS RDS (MySQL). ¡Gracias por confiar en nuestra peluquería de mascotas! 🐶✂️</p>
           <hr>
-          <a href="/" class="btn btn-outline-primary">Volver</a>
+          <a href="/" class="btn btn-outline-primary">Volver al inicio</a>
         </div>
       </div>
     </div>
@@ -134,19 +182,22 @@ cat << 'EOF' > public/success.html
 EOF
 
 sudo -u ec2-user npm init -y
-sudo -u ec2-user npm install express body-parser sqlite3
+sudo -u ec2-user npm install express body-parser mysql2
 
-cat << 'EOF' > /etc/systemd/system/petshop.service
+cat << EOF > /etc/systemd/system/petshop.service
 [Unit]
-Description=Petshop Node.js App
+Description=Petshop Node.js App v8-full (RDS MySQL)
 After=network.target
 
 [Service]
 User=ec2-user
 WorkingDirectory=/home/ec2-user/petshop-app
+Environment=DB_HOST=${db_host}
+Environment=DB_USER=${db_user}
+Environment=DB_PASS=${db_pass}
+Environment=DB_NAME=${db_name}
 ExecStart=/usr/bin/node /home/ec2-user/petshop-app/app.js
 Restart=always
-Environment=PORT=8080
 
 [Install]
 WantedBy=multi-user.target

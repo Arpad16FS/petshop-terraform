@@ -1,15 +1,17 @@
 resource "aws_lb" "petshop_alb" {
-  name               = "petshop-alb"
+  name               = "petshop-alb-v8-full"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.petshop_sg.id]
+  security_groups    = [aws_security_group.petshop_app_sg.id]
   subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
 
-  tags = { Name = "petshop-alb" }
+  tags = {
+    Name = "petshop-alb-v8-full"
+  }
 }
 
 resource "aws_lb_target_group" "petshop_tg" {
-  name     = "petshop-tg"
+  name     = "petshop-tg-v8-full"
   port     = 8080
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -17,16 +19,22 @@ resource "aws_lb_target_group" "petshop_tg" {
   health_check {
     path                = "/"
     port                = "8080"
-    healthy_threshold   = 3
+    protocol            = "HTTP"
+    healthy_threshold   = 2
     unhealthy_threshold = 2
     timeout             = 5
     interval            = 30
+    matcher             = "200-399"
+  }
+
+  tags = {
+    Name = "petshop-tg-v8-full"
   }
 }
 
 resource "aws_lb_listener" "petshop_listener" {
   load_balancer_arn = aws_lb.petshop_alb.arn
-  port              = "80"
+  port              = 80
   protocol          = "HTTP"
 
   default_action {

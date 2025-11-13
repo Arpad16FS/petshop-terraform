@@ -2,12 +2,18 @@ resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags = { Name = "petshop-vpc" }
+
+  tags = {
+    Name = "petshop-vpc-v8-full"
+  }
 }
 
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
-  tags = { Name = "petshop-igw" }
+
+  tags = {
+    Name = "petshop-igw-v8-full"
+  }
 }
 
 resource "aws_subnet" "public_a" {
@@ -15,7 +21,10 @@ resource "aws_subnet" "public_a" {
   cidr_block              = "10.0.1.0/24"
   availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
-  tags = { Name = "petshop-public-a" }
+
+  tags = {
+    Name = "petshop-public-a-v8-full"
+  }
 }
 
 resource "aws_subnet" "public_b" {
@@ -23,16 +32,23 @@ resource "aws_subnet" "public_b" {
   cidr_block              = "10.0.2.0/24"
   availability_zone       = "us-east-1b"
   map_public_ip_on_launch = true
-  tags = { Name = "petshop-public-b" }
+
+  tags = {
+    Name = "petshop-public-b-v8-full"
+  }
 }
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
-  tags = { Name = "petshop-rt-public" }
+
+  tags = {
+    Name = "petshop-rt-public-v8-full"
+  }
 }
 
 resource "aws_route_table_association" "public_a" {
